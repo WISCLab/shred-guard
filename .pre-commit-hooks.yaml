@@ -1,0 +1,15 @@
+- id: shredguard-check
+  name: shredguard check
+  description: Check for PHI patterns in files
+  entry: shredguard check
+  language: python
+  types: [text]
+  require_serial: false
+
+- id: shredguard-fix
+  name: shredguard fix
+  description: Replace PHI patterns with pseudonyms
+  entry: shredguard fix
+  language: python
+  types: [text]
+  require_serial: false
