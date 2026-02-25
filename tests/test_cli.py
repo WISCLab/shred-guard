@@ -215,6 +215,27 @@ class TestFixCommand:
         assert result.exit_code == 1
         assert "already exists" in result.output.lower() or "collision" in result.output.lower()
 
+    def test_fix_prefix_collision_in_non_phi_file(
+        self, runner: CliRunner, tmp_path: Path, config_file: Path
+    ):
+        """Test that prefix collision is detected even in files without PHI."""
+        # File with PHI
+        phi_file = tmp_path / "phi.txt"
+        phi_file.write_text("SUB-1234\n")
+
+        # File without PHI but with existing prefix
+        other_file = tmp_path / "other.txt"
+        other_file.write_text("Some text with REDACTED-0 already\n")
+
+        result = runner.invoke(
+            main, ["fix", "--config", str(config_file), str(tmp_path)]
+        )
+
+        assert result.exit_code == 1
+        assert "already exists" in result.output.lower() or "collision" in result.output.lower()
+        # Verify no changes were made to the PHI file
+        assert phi_file.read_text() == "SUB-1234\n"
+
     def test_fix_multiple_files(self, runner: CliRunner, tmp_path: Path, config_file: Path):
         """Test fixing multiple files."""
         file1 = tmp_path / "file1.txt"

@@ -9,7 +9,7 @@ import click
 
 from . import __version__
 from .config import Config, ConfigError
-from .fixer import PrefixCollisionError, apply_fixes
+from .fixer import PrefixCollisionError, apply_fixes, check_prefix_collisions
 from .gitignore import GitignoreFilter
 from .output import Formatter
 from .scanner import scan_files
@@ -238,6 +238,17 @@ def fix(
     if not file_list:
         click.echo(formatter.format_warning("No files to scan"))
         sys.exit(0)
+
+    # Check for prefix collisions in ALL files before scanning for patterns
+    collisions = check_prefix_collisions(file_list, prefix)
+    if collisions:
+        click.echo(
+            formatter.format_prefix_collision_error(
+                PrefixCollisionError(prefix, collisions)
+            ),
+            err=True,
+        )
+        sys.exit(1)
 
     # Scan files
     matches, binary_files = scan_files(file_list, config.patterns, verbose=verbose)
