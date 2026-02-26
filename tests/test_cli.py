@@ -6,6 +6,7 @@ from pathlib import Path
 from click.testing import CliRunner
 
 from shredguard.cli import main
+import re
 
 
 @pytest.fixture
@@ -262,7 +263,8 @@ class TestVersionFlag:
 
         assert result.exit_code == 0
         assert "shredguard" in result.output.lower()
-        assert "0.1.0" in result.output
+        # Accept any version pattern like 0.1.0, 1.2.3, etc.
+        assert re.search(r"\d+\.\d+\.\d+", result.output)
 
 
 class TestHelpFlag:

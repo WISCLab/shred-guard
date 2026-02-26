@@ -1,0 +1,8 @@
+repos:
+  - repo: local
+    hooks:
+      - id: shredguard-check
+        name: shredguard check
+        entry: shredguard check
+        language: system
+        types: [text]
