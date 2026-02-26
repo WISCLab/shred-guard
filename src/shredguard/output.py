@@ -49,15 +49,16 @@ def supports_unicode() -> bool:
     if os.environ.get("FORCE_ASCII"):
         return False
 
-    if sys.platform == "win32":
-        # Check if the console is using UTF-8 (code page 65001)
-        try:
-            import ctypes
+    if os.environ.get("FORCE_UNICODE"):
+        return True
 
-            return ctypes.windll.kernel32.GetConsoleOutputCP() == 65001
-        except Exception:
-            return False
-    return True
+    # Check stdout encoding - this is the most reliable way to determine
+    # if Unicode characters can be written without encoding errors
+    encoding = getattr(sys.stdout, "encoding", None) or ""
+    encoding = encoding.lower().replace("-", "").replace("_", "")
+
+    # Only allow Unicode if we have a Unicode-capable encoding
+    return encoding in ("utf8", "utf16", "utf32")
 
 
 class Formatter:
