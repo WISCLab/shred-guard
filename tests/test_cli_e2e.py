@@ -17,6 +17,94 @@ from pathlib import Path
 from textwrap import dedent
 
 import pytest
+import random
+
+pytestmark = pytest.mark.e2e
+
+
+def _generate_safe_content() -> str:
+    """Generate random file content that will never contain PHI patterns.
+
+    Avoids:
+    - SUB-XXXX (Subject ID pattern)
+    - XXX-XX-XXXX (SSN-like pattern)
+    - MRNXXXXXX (Medical Record Number)
+    - REDACTED-X, ID-X, ANON-X (prefix patterns that would cause collisions)
+    """
+    templates = [
+        # Code-like content
+        "def process_data(items):\n    for item in items:\n        yield item.strip()\n",
+        "class DataHandler:\n    def __init__(self):\n        self.cache = {}\n",
+        "import os\nimport sys\n\nDEBUG = True\n",
+        "# Configuration file\nMAX_RETRIES = 3\nTIMEOUT = 30\n",
+        "async def fetch_records():\n    async with session.get(url) as resp:\n        return await resp.json()\n",
+        # Documentation-like content
+        "# Overview\n\nThis module handles data processing tasks.\n\n## Usage\n\nImport and call the main function.\n",
+        "## API Reference\n\nThe following endpoints are available:\n- GET /status\n- POST /process\n",
+        "Notes from meeting:\n- Review architecture\n- Update documentation\n- Schedule demo\n",
+        # Config-like content
+        '{\n  "version": "1.0.0",\n  "debug": false,\n  "workers": 4\n}\n',
+        "name: test-app\nversion: 2.1.0\ndependencies:\n  - requests\n  - click\n",
+        "[settings]\nlog_level = INFO\nmax_connections = 100\n",
+        # Data-like content (safe patterns)
+        "timestamp,value,status\n2024-01-15,42.5,ok\n2024-01-16,38.2,ok\n",
+        "user_alpha,active,2024\nuser_beta,inactive,2023\nuser_gamma,active,2024\n",
+        # Text content
+        "Lorem ipsum dolor sit amet, consectetur adipiscing elit.\nSed do eiusmod tempor incididunt ut labore.\n",
+        "The quick brown fox jumps over the lazy dog.\nPack my box with five dozen liquor jugs.\n",
+        "Welcome to the application.\nPlease read the documentation before proceeding.\n",
+    ]
+    return random.choice(templates)
+
+
+def _random_filename() -> str:
+    """Generate a random safe filename."""
+    prefixes = ["data", "config", "utils", "helper", "main", "test", "module", "handler", "service", "core"]
+    suffixes = ["", "_v2", "_new", "_backup", "_temp"]
+    extensions = [".py", ".txt", ".json", ".md", ".yaml", ".csv", ".cfg", ".ini"]
+    return f"{random.choice(prefixes)}{random.choice(suffixes)}{random.choice(extensions)}"
+
+
+def _create_random_file_structure(root: Path, num_files: int = 20, max_depth: int = 3) -> None:
+    """Create a random file structure with safe content.
+
+    This simulates a real project with many files to ensure shredguard
+    performs correctly when scanning directories with lots of content.
+
+    Args:
+        root: Root directory to create files in
+        num_files: Number of files to create
+        max_depth: Maximum directory nesting depth
+    """
+    # Generate some random directory paths
+    dir_names = ["src", "lib", "pkg", "internal", "core", "util", "common", "shared", "app", "modules"]
+
+    created_files = set()
+
+    for _ in range(num_files):
+        # Random depth for this file
+        depth = random.randint(0, max_depth)
+
+        # Build random path
+        path_parts = [random.choice(dir_names) for _ in range(depth)]
+        dir_path = root.joinpath(*path_parts) if path_parts else root
+
+        # Ensure directory exists
+        dir_path.mkdir(parents=True, exist_ok=True)
+
+        # Generate unique filename
+        for _ in range(10):  # Try up to 10 times to get unique name
+            filename = _random_filename()
+            file_path = dir_path / filename
+            if file_path not in created_files:
+                break
+        else:
+            # Fallback: add random suffix
+            filename = f"file_{random.randint(1000, 9999)}.txt"
+            file_path = dir_path / filename
+
+        created_files.add(file_path)
+        file_path.write_text(_generate_safe_content())
 
 
 class CLIRunner:
@@ -109,7 +197,12 @@ class CLIResult:
 
 @pytest.fixture
 def project(tmp_path: Path) -> Path:
-    """Create a test project with default config."""
+    """Create a test project with default config and random file structure.
+
+    This fixture automatically populates the test directory with random
+    files to simulate a real project. This ensures tests run against
+    realistic directory structures with many files.
+    """
     config = tmp_path / "pyproject.toml"
     config.write_text(dedent("""
         [tool.shredguard]
@@ -125,6 +218,10 @@ def project(tmp_path: Path) -> Path:
         regex = "MRN\\\\d{6,10}"
         description = "Medical Record Number"
     """).strip())
+
+    # Create random file structure to simulate real project
+    _create_random_file_structure(tmp_path, num_files=random.randint(5, 50), max_depth=random.randint(2, 50))
+
     return tmp_path
 
 
