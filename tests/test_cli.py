@@ -263,8 +263,8 @@ class TestVersionFlag:
 
         assert result.exit_code == 0
         assert "shredguard" in result.output.lower()
-        # Accept any version pattern like 0.1.0, 1.2.3, etc.
-        assert re.search(r"\d+\.\d+\.\d+", result.output)
+        # Accept any version pattern like 0.1.0, 1.2.3, or dev versions like 0.0.post1.dev1+g...
+        assert re.search(r"\d+\.\d+", result.output)
 
 
 class TestHelpFlag:
