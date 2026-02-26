@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
 name = "shredguard"
-version = "0.1.0"
+dynamic = ["version"]
 description = "A CLI tool to scan files for configurable regex patterns (PHI identifiers) and optionally replace matches with deterministic pseudonyms"
 readme = "README.md"
 license = "MIT"
@@ -46,6 +46,15 @@ Homepage = "https://github.com/shredguard/shredguard"
 Documentation = "https://github.com/shredguard/shredguard#readme"
 Repository = "https://github.com/shredguard/shredguard"
 Issues = "https://github.com/shredguard/shredguard/issues"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+version_scheme = "no-guess-dev"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/shredguard/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/shredguard"]
