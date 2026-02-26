@@ -7,7 +7,7 @@ Scan files for PHI (Protected Health Information) patterns and replace them with
 
 ## Appendix
 
-- [Value Proposition](https://raw.githubusercontent.com/WiscLab/shred-guard/main/value-proposition.svg)
+- [Value Proposition](https://github.com/WISCLab/shred-guard/blob/main/value-proposition.svg)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Commands](#commands)
