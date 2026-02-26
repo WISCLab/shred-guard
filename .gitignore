@@ -29,3 +29,6 @@ coverage.xml
 # OS
 .DS_Store
 Thumbs.db
+
+# Release artifacts
+_version.py

@@ -43,7 +43,9 @@ class TestIsBinaryFile:
     def test_unicode_file(self, tmp_path: Path):
         """Test that unicode text files are not binary."""
         unicode_file = tmp_path / "unicode.txt"
-        unicode_file.write_text("Hello, 世界! 🌍")
+        # Use UTF-8 encoding explicitly and characters that won't cause
+        # Windows console encoding issues when pytest displays errors
+        unicode_file.write_text("Hello, caf\u00e9! \u00e9\u00e8\u00e0", encoding="utf-8")
 
         assert not is_binary_file(unicode_file)
 

@@ -42,18 +42,50 @@ def supports_color() -> bool:
     return sys.stdout.isatty()
 
 
+def supports_unicode() -> bool:
+    """Check if the terminal supports Unicode output."""
+    import os
+
+    if os.environ.get("FORCE_ASCII"):
+        return False
+
+    if sys.platform == "win32":
+        # Check if the console is using UTF-8 (code page 65001)
+        try:
+            import ctypes
+
+            return ctypes.windll.kernel32.GetConsoleOutputCP() == 65001
+        except Exception:
+            return False
+    return True
+
+
 class Formatter:
     """Formats output for the terminal."""
 
-    def __init__(self, use_color: bool | None = None):
+    def __init__(self, use_color: bool | None = None, use_unicode: bool | None = None):
         """Initialize the formatter.
 
         Args:
             use_color: Whether to use color. None = auto-detect.
+            use_unicode: Whether to use Unicode symbols. None = auto-detect.
         """
         if use_color is None:
             use_color = supports_color()
+        if use_unicode is None:
+            use_unicode = supports_unicode()
         self.use_color = use_color
+        self.use_unicode = use_unicode
+
+    @property
+    def check_mark(self) -> str:
+        """Return check mark symbol (Unicode or ASCII fallback)."""
+        return "\u2713" if self.use_unicode else "[OK]"
+
+    @property
+    def x_mark(self) -> str:
+        """Return X mark symbol (Unicode or ASCII fallback)."""
+        return "\u2717" if self.use_unicode else "[X]"
 
     def _color(self, text: str, *codes: str) -> str:
         """Apply color codes to text."""
@@ -120,10 +152,10 @@ class Formatter:
             Formatted summary string.
         """
         if match_count == 0:
-            check = self._color("✓", Colors.GREEN, Colors.BOLD)
+            check = self._color(self.check_mark, Colors.GREEN, Colors.BOLD)
             return f"{check} No PHI patterns found ({pattern_count} patterns checked)"
 
-        x_mark = self._color("✗", Colors.RED, Colors.BOLD)
+        x_mark = self._color(self.x_mark, Colors.RED, Colors.BOLD)
         matches_word = "match" if match_count == 1 else "matches"
         files_word = "file" if file_count == 1 else "files"
 
@@ -142,10 +174,10 @@ class Formatter:
             Formatted summary string.
         """
         if result.total_replacements == 0:
-            check = self._color("✓", Colors.GREEN, Colors.BOLD)
+            check = self._color(self.check_mark, Colors.GREEN, Colors.BOLD)
             return f"{check} No replacements needed"
 
-        check = self._color("✓", Colors.GREEN, Colors.BOLD)
+        check = self._color(self.check_mark, Colors.GREEN, Colors.BOLD)
         files_word = "file" if result.files_modified == 1 else "files"
         values_word = "value" if result.unique_values == 1 else "values"
 
