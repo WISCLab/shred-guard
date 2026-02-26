@@ -1,216 +1,174 @@
-# ShredGuard
+# ShredGuard by [WISC Lab](https://kidspeech.wisc.edu/)
 
-A CLI tool to scan files for configurable regex patterns (PHI identifiers) and optionally replace matches with deterministic pseudonyms. Integrates with pre-commit framework.
+[![CI](https://github.com/WiscLab/shred-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/WISCLab/shred-guard/actions/workflows/ci.yml) [![CD](https://github.com/WISCLab/shred-guard/actions/workflows/cd.yml/badge.svg)](https://github.com/WISCLab/shred-guard/actions/workflows/cd.yml)
 
-## Features
+Scan files for PHI (Protected Health Information) patterns and replace them with deterministic pseudonyms. Integrates seamlessly with pre-commit hooks.
 
-- Scan files for PHI patterns using configurable regex
-- Replace matches with deterministic pseudonyms (same value = same ID)
-- Pre-commit integration for automated checks
-- Respects `.gitignore` patterns
-- Ruff-style output format (`file:line:col: SGxxx Message`)
-- Cross-platform support (Windows, macOS, Linux)
+
+## Appendix
+
+- [Value Proposition](https://raw.githubusercontent.com/WiscLab/shred-guard/main/value-proposition.svg)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Commands](#commands)
+  - [shredguard init](#shredguard-init)
+  - [shredguard check](#shredguard-check)
+  - [shredguard fix](#shredguard-fix)
+- [Configuration](#configuration)
+- [Pre-commit](#pre-commit)
+- [Reference](#reference)
+  - [CLI Options](#cli-options)
+  - [Configuration Reference](#configuration-reference)
+  - [Built-in Pattern Suggestions](#built-in-pattern-suggestions)
+  - [Exit Codes](#exit-codes)
+  - [Binary File Handling](#binary-file-handling)
+- [License](#license)
 
 ## Installation
 
 ```bash
-pip install shredguard
-```
-
-Or install from source:
-
-```bash
-pip install -e .
+pip install shred-guard
 ```
 
 ## Quick Start
 
-1. Add configuration to your `pyproject.toml`:
+Run the interactive setup wizard:
+
+```bash
+shredguard init
+```
+
+This walks you through:
+- Selecting PHI patterns to detect (SSNs, emails, MRNs, custom patterns)
+- Configuring file restrictions
+- Setting up pre-commit hooks
+
+## Commands
+
+### `shredguard init`
+
+Interactive setup wizard. Creates your configuration and optionally sets up pre-commit integration.
+
+### `shredguard check`
+
+Scan for PHI patterns:
+
+```bash
+shredguard check .                    # Scan current directory
+shredguard check data/ notes.txt     # Scan specific paths
+```
+
+Output uses ruff-style formatting:
+```
+patient_notes.txt:1:9: SG001 Subject ID [SUB-1234]
+patient_notes.txt:2:6: SG002 SSN [123-45-6789]
+```
+
+### `shredguard fix`
+
+Replace PHI with pseudonyms:
+
+```bash
+shredguard fix .                                    # Replace with REDACTED-0, REDACTED-1, ...
+shredguard fix --prefix ANON .                     # Custom prefix: ANON-0, ANON-1, ...
+shredguard fix --output-map mapping.json .         # Save original -> pseudonym mapping
+```
+
+Replacements are deterministic: and the same value always gets the same pseudonym within a run.
+
+## Configuration
+
+Configuration lives in `pyproject.toml` (or `/*/*.toml` set with --config):
 
 ```toml
 [tool.shredguard]
+
 [[tool.shredguard.patterns]]
 regex = "SUB-\\d{4,6}"
 description = "Subject ID"
 
 [[tool.shredguard.patterns]]
 regex = "\\b\\d{3}-\\d{2}-\\d{4}\\b"
-description = "SSN-like pattern"
-
-[[tool.shredguard.patterns]]
-regex = "MRN\\d{6,10}"
-description = "Medical Record Number"
+description = "SSN"
 ```
 
-2. Run a check:
+Each pattern can optionally include `files` and `exclude_files` globs to control which files are scanned.
 
-```bash
-shredguard check .
-```
+## Pre-commit
 
-3. Fix (replace) found patterns:
-
-```bash
-shredguard fix --prefix REDACTED .
-```
-
-## Pre-commit Setup
-
-Add to your `.pre-commit-config.yaml`:
+Add to `.pre-commit-config.yaml`:
 
 ```yaml
 repos:
-  - repo: https://github.com/shredguard/shredguard
-    rev: v0.1.0
+  - repo: local
     hooks:
       - id: shredguard-check
+        name: shredguard check
+        entry: shredguard check
+        language: system
+        types: [text]
 ```
 
-Or to automatically fix:
+Or let `shredguard init` set this up for you.
 
-```yaml
-repos:
-  - repo: https://github.com/shredguard/shredguard
-    rev: v0.1.0
-    hooks:
-      - id: shredguard-fix
-        args: [--prefix, REDACTED]
-```
+## Reference
 
-## CLI Reference
+### CLI Options
 
-### `shredguard check`
+**`shredguard check [OPTIONS] [FILES]...`**
 
-Scan files for PHI patterns.
+| Option | Description |
+|--------|-------------|
+| `--all-files` | Scan all files recursively |
+| `--no-gitignore` | Don't respect `.gitignore` patterns |
+| `--config PATH` | Path to config file |
+| `-v, --verbose` | Show verbose output (skipped files, etc.) |
 
-```bash
-shredguard check [OPTIONS] [FILES]...
-```
+**`shredguard fix [OPTIONS] [FILES]...`**
 
-**Arguments:**
-- `FILES` - Files or directories to scan (default: current directory)
+| Option | Description |
+|--------|-------------|
+| `--prefix TEXT` | Prefix for pseudonyms (default: `REDACTED`) |
+| `--output-map PATH` | Write JSON mapping of originals to pseudonyms |
+| `--all-files` | Scan all files recursively |
+| `--no-gitignore` | Don't respect `.gitignore` patterns |
+| `--config PATH` | Path to config file |
+| `-v, --verbose` | Show verbose output |
 
-**Options:**
-- `--all-files` - Scan all files (typically used with pre-commit)
-- `--no-gitignore` - Don't respect `.gitignore` patterns
-- `--config PATH` - Path to config file (default: searches for `pyproject.toml`)
-- `--verbose, -v` - Show verbose output (skipped files, etc.)
-
-**Exit codes:**
-- `0` - No matches found
-- `1` - Matches found or error
-
-### `shredguard fix`
-
-Replace PHI patterns with pseudonyms.
-
-```bash
-shredguard fix [OPTIONS] [FILES]...
-```
-
-**Arguments:**
-- `FILES` - Files or directories to scan and fix (default: current directory)
-
-**Options:**
-- `--prefix PREFIX` - Prefix for pseudonyms (default: `REDACTED`)
-- `--output-map PATH` - Write JSON mapping of originals to pseudonyms
-- `--all-files` - Scan all files
-- `--no-gitignore` - Don't respect `.gitignore` patterns
-- `--config PATH` - Path to config file
-- `--verbose, -v` - Show verbose output
-
-## Configuration Reference
-
-Configuration is read from `pyproject.toml` under the `[tool.shredguard]` section.
-
-### Patterns
-
-Define patterns to scan for:
+### Configuration Reference
 
 ```toml
 [[tool.shredguard.patterns]]
 regex = "SUB-\\d{4,6}"        # Required: regex pattern
-description = "Subject ID"     # Optional: description for output
+description = "Subject ID"     # Optional: shown in output
 files = ["*.csv", "data/**"]   # Optional: only scan matching files
-exclude_files = ["*_test.*"]   # Optional: exclude matching files
+exclude_files = ["*_test.*"]   # Optional: skip matching files
 ```
 
-**Pattern fields:**
-- `regex` (required) - Regular expression pattern to match
-- `description` (optional) - Human-readable description shown in output
-- `files` (optional) - List of glob patterns; only scan files matching these
-- `exclude_files` (optional) - List of glob patterns; skip files matching these
+### Built-in Pattern Suggestions
 
-### Pattern Codes
+When running `shredguard init`, you can choose from these common patterns:
 
-Patterns are assigned stable codes (SG001, SG002, etc.) based on their order in the config file.
+| Pattern | Description |
+|---------|-------------|
+| `SUB-\d{4,6}` | Subject ID |
+| `\b\d{3}-\d{2}-\d{4}\b` | Social Security Number |
+| `MRN\d{6,10}` | Medical Record Number |
+| `[email pattern]` | Email addresses |
+| `[phone pattern]` | Phone numbers (10 digits) |
+| `\b\d{5}(?:-\d{4})?\b` | ZIP codes |
 
-## Example Workflow
+### Exit Codes
 
-1. Create test files with PHI:
+| Code | Meaning |
+|------|---------|
+| `0` | Success (no matches found for `check`) |
+| `1` | Matches found or error |
 
-```bash
-echo "Patient SUB-1234 was enrolled on 2024-01-15" > patient_notes.txt
-echo "SSN: 123-45-6789" >> patient_notes.txt
-```
+### Binary File Handling
 
-2. Check for PHI:
-
-```bash
-$ shredguard check patient_notes.txt
-patient_notes.txt:1:9: SG001 Subject ID [SUB-1234]
-patient_notes.txt:2:6: SG002 SSN-like pattern [123-45-6789]
-
-Found 2 matches in 1 file
-```
-
-3. Replace PHI with pseudonyms:
-
-```bash
-$ shredguard fix --prefix ANON --output-map mapping.json patient_notes.txt
-Replaced 2 occurrences of 2 unique values in 1 file
-Mapping written to: mapping.json
-```
-
-4. Verify replacement:
-
-```bash
-$ cat patient_notes.txt
-Patient ANON-0 was enrolled on 2024-01-15
-SSN: ANON-1
-
-$ cat mapping.json
-{
-  "SUB-1234": "ANON-0",
-  "123-45-6789": "ANON-1"
-}
-```
-
-## Deterministic Replacement
-
-ShredGuard uses deterministic pseudonym assignment:
-- The same matched value always gets the same pseudonym within a single run
-- IDs are assigned in order of first encounter (0, 1, 2, ...)
-- The mapping can be saved to a JSON file for reference
-
-## Binary File Detection
-
-Binary files are automatically detected and skipped using a null byte heuristic (checking first 8KB). Use `--verbose` to see which files are skipped.
-
-## Development
-
-Install development dependencies:
-
-```bash
-pip install -e ".[dev]"
-```
-
-Run tests:
-
-```bash
-pytest
-```
+Binary files are automatically detected and skipped (null byte check in first 8KB). Use `--verbose` to see skipped files.
 
 ## License
 
-MIT
+[MIT](https://github.com/WiscLab/shred-guard/blob/main/LICENSE)

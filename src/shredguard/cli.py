@@ -373,7 +373,7 @@ def init() -> None:
         click.echo(f"  [{i}] {pattern['description']}")
         click.secho(f"      regex: {pattern['regex']}", fg="bright_black")
 
-        if click.confirm(f"      Include this pattern?", default=True):
+        if click.confirm("      Include this pattern?", default=True):
             selected_patterns.append(pattern.copy())
         click.echo()
 

@@ -7,7 +7,6 @@ from pathlib import Path
 from shredguard.config import Pattern
 from shredguard.fixer import (
     Fixer,
-    FixResult,
     PrefixCollisionError,
     check_prefix_collisions,
     apply_fixes,

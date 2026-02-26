@@ -1,6 +1,5 @@
 """Tests for shredguard.gitignore module."""
 
-import pytest
 from pathlib import Path
 
 from shredguard.gitignore import (

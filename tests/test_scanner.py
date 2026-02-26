@@ -1,6 +1,5 @@
 """Tests for shredguard.scanner module."""
 
-import pytest
 from pathlib import Path
 
 from shredguard.config import Pattern
