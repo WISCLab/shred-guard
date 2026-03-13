@@ -6,10 +6,10 @@ build-backend = "hatchling.build"
 name = "shred-guard"
 dynamic = ["version"]
 description = "A CLI tool to scan files for configurable regex patterns (PHI identifiers) and optionally replace matches with deterministic pseudonyms"
-readme = "README.md"
+readme = "README_PYPI.md"
 requires-python = ">=3.10"
 authors = [
-    { name = "@BeckettFrey" }
+    { name = "@BeckettFrey", email = "beckett.code@outlook.com" }
 ]
 keywords = ["phi", "pii", "redaction", "pre-commit", "security"]
 classifiers = [
@@ -78,3 +78,9 @@ description = "SSN-like pattern"
 [[tool.shredguard.patterns]]
 regex = "MRN\\d{6,10}"
 description = "Medical Record Number"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+]

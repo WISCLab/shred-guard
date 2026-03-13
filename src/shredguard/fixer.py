@@ -16,7 +16,9 @@ class PrefixCollisionError(Exception):
     def __init__(self, prefix: str, collisions: list[tuple[Path, int, str]]):
         self.prefix = prefix
         self.collisions = collisions
-        super().__init__(f"Prefix '{prefix}' already exists in {len(collisions)} location(s)")
+        super().__init__(
+            f"Prefix '{prefix}' already exists in {len(collisions)} location(s)"
+        )
 
 
 @dataclass

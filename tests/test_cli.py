@@ -1,12 +1,13 @@
 """Tests for shredguard.cli module."""
 
 import json
+import subprocess
 import pytest
+import re
 from pathlib import Path
 from click.testing import CliRunner
 
 from shredguard.cli import main
-import re
 
 
 @pytest.fixture
@@ -35,45 +36,54 @@ description = "Medical Record Number"
 class TestCheckCommand:
     """Tests for the check command."""
 
-    def test_no_matches_success(self, runner: CliRunner, tmp_path: Path, config_file: Path):
+    def test_no_matches_success(
+        self, runner: CliRunner, tmp_path: Path, config_file: Path
+    ):
         """Test that check succeeds with no matches."""
         test_file = tmp_path / "clean.txt"
         test_file.write_text("No PHI here\n")
 
-        result = runner.invoke(main, ["check", "--config", str(config_file), str(test_file)])
+        result = runner.invoke(
+            main, ["check", "--config", str(config_file), str(test_file)]
+        )
 
         assert result.exit_code == 0
         assert "No PHI patterns found" in result.output
 
-    def test_matches_found_failure(self, runner: CliRunner, tmp_path: Path, config_file: Path):
+    def test_matches_found_failure(
+        self, runner: CliRunner, tmp_path: Path, config_file: Path
+    ):
         """Test that check fails when matches are found."""
         test_file = tmp_path / "phi.txt"
         test_file.write_text("Subject SUB-1234 enrolled\n")
 
-        result = runner.invoke(main, ["check", "--config", str(config_file), str(test_file)])
+        result = runner.invoke(
+            main, ["check", "--config", str(config_file), str(test_file)]
+        )
 
         assert result.exit_code == 1
         assert "SUB-1234" in result.output
         assert "SG001" in result.output
         assert "Found 1 match" in result.output
 
-    def test_multiple_matches(self, runner: CliRunner, tmp_path: Path, config_file: Path):
+    def test_multiple_matches(
+        self, runner: CliRunner, tmp_path: Path, config_file: Path
+    ):
         """Test output with multiple matches."""
         test_file = tmp_path / "phi.txt"
         test_file.write_text("SUB-1234 and MRN123456\n")
 
-        result = runner.invoke(main, ["check", "--config", str(config_file), str(test_file)])
+        result = runner.invoke(
+            main, ["check", "--config", str(config_file), str(test_file)]
+        )
 
         assert result.exit_code == 1
         assert "SUB-1234" in result.output
         assert "MRN123456" in result.output
         assert "Found 2 matches" in result.output
 
-    def test_config_not_found(self, runner: CliRunner, tmp_path: Path):
+    def test_config_not_found(self, runner: CliRunner):
         """Test error when config is not found."""
-        test_file = tmp_path / "test.txt"
-        test_file.write_text("test\n")
-
         # Run in isolated directory with no config
         with runner.isolated_filesystem():
             Path("test.txt").write_text("test\n")
@@ -82,7 +92,9 @@ class TestCheckCommand:
         assert result.exit_code == 1
         assert "No shredguard configuration found" in result.output
 
-    def test_verbose_shows_binary_skips(self, runner: CliRunner, tmp_path: Path, config_file: Path):
+    def test_verbose_shows_binary_skips(
+        self, runner: CliRunner, tmp_path: Path, config_file: Path
+    ):
         """Test that --verbose shows skipped binary files."""
         binary_file = tmp_path / "test.bin"
         binary_file.write_bytes(b"\x00binary")
@@ -91,9 +103,11 @@ class TestCheckCommand:
             main, ["check", "--config", str(config_file), "--verbose", str(binary_file)]
         )
 
-        assert "binary file" in result.output.lower() or "skip" in result.output.lower()
+        assert "binary file" in result.output.lower()
 
-    def test_respects_gitignore(self, runner: CliRunner, tmp_path: Path, config_file: Path):
+    def test_respects_gitignore(
+        self, runner: CliRunner, tmp_path: Path, config_file: Path
+    ):
         """Test that .gitignore is respected by default."""
         # Create .gitignore
         gitignore = tmp_path / ".gitignore"
@@ -106,12 +120,17 @@ class TestCheckCommand:
         scanned_file = tmp_path / "scanned.txt"
         scanned_file.write_text("Clean file\n")
 
-        result = runner.invoke(main, ["check", "--config", str(config_file), str(tmp_path)])
+        result = runner.invoke(
+            main, ["check", "--config", str(config_file), str(tmp_path)]
+        )
 
-        # Should not find the match in ignored file
+        # Scan should complete successfully with no PHI found (ignored file was skipped)
+        assert result.exit_code == 0
         assert "SUB-1234" not in result.output
 
-    def test_no_gitignore_flag(self, runner: CliRunner, tmp_path: Path, config_file: Path):
+    def test_no_gitignore_flag(
+        self, runner: CliRunner, tmp_path: Path, config_file: Path
+    ):
         """Test that --no-gitignore disables gitignore."""
         # Create .gitignore
         gitignore = tmp_path / ".gitignore"
@@ -122,19 +141,24 @@ class TestCheckCommand:
         ignored_file.write_text("SUB-1234\n")
 
         result = runner.invoke(
-            main, ["check", "--config", str(config_file), "--no-gitignore", str(tmp_path)]
+            main,
+            ["check", "--config", str(config_file), "--no-gitignore", str(tmp_path)],
         )
 
         # Should find the match now
         assert result.exit_code == 1
         assert "SUB-1234" in result.output
 
-    def test_ruff_style_output(self, runner: CliRunner, tmp_path: Path, config_file: Path):
+    def test_ruff_style_output(
+        self, runner: CliRunner, tmp_path: Path, config_file: Path
+    ):
         """Test that output is in ruff style format."""
         test_file = tmp_path / "phi.txt"
         test_file.write_text("SUB-1234\n")
 
-        result = runner.invoke(main, ["check", "--config", str(config_file), str(test_file)])
+        result = runner.invoke(
+            main, ["check", "--config", str(config_file), str(test_file)]
+        )
 
         # Should have file:line:col format
         assert ":1:1:" in result.output or "phi.txt:1:1" in result.output
@@ -149,7 +173,8 @@ class TestFixCommand:
         test_file.write_text("Subject SUB-1234 enrolled\n")
 
         result = runner.invoke(
-            main, ["fix", "--config", str(config_file), "--prefix", "ID", str(test_file)]
+            main,
+            ["fix", "--config", str(config_file), "--prefix", "ID", str(test_file)],
         )
 
         assert result.exit_code == 0
@@ -168,7 +193,9 @@ class TestFixCommand:
         assert result.exit_code == 0
         assert "No replacements needed" in result.output
 
-    def test_fix_with_output_map(self, runner: CliRunner, tmp_path: Path, config_file: Path):
+    def test_fix_with_output_map(
+        self, runner: CliRunner, tmp_path: Path, config_file: Path
+    ):
         """Test fix with --output-map flag."""
         test_file = tmp_path / "phi.txt"
         test_file.write_text("SUB-1234\n")
@@ -179,9 +206,12 @@ class TestFixCommand:
             main,
             [
                 "fix",
-                "--config", str(config_file),
-                "--prefix", "ID",
-                "--output-map", str(mapping_file),
+                "--config",
+                str(config_file),
+                "--prefix",
+                "ID",
+                "--output-map",
+                str(mapping_file),
                 str(test_file),
             ],
         )
@@ -192,7 +222,9 @@ class TestFixCommand:
         mapping = json.loads(mapping_file.read_text())
         assert mapping == {"SUB-1234": "ID-0"}
 
-    def test_fix_default_prefix(self, runner: CliRunner, tmp_path: Path, config_file: Path):
+    def test_fix_default_prefix(
+        self, runner: CliRunner, tmp_path: Path, config_file: Path
+    ):
         """Test that default prefix is REDACTED."""
         test_file = tmp_path / "phi.txt"
         test_file.write_text("SUB-1234\n")
@@ -204,7 +236,9 @@ class TestFixCommand:
         assert result.exit_code == 0
         assert test_file.read_text() == "REDACTED-0\n"
 
-    def test_fix_prefix_collision(self, runner: CliRunner, tmp_path: Path, config_file: Path):
+    def test_fix_prefix_collision(
+        self, runner: CliRunner, tmp_path: Path, config_file: Path
+    ):
         """Test that prefix collision is detected."""
         test_file = tmp_path / "phi.txt"
         test_file.write_text("SUB-1234 and REDACTED-0 already\n")
@@ -214,7 +248,10 @@ class TestFixCommand:
         )
 
         assert result.exit_code == 1
-        assert "already exists" in result.output.lower() or "collision" in result.output.lower()
+        assert (
+            "already exists" in result.output.lower()
+            or "collision" in result.output.lower()
+        )
 
     def test_fix_prefix_collision_in_non_phi_file(
         self, runner: CliRunner, tmp_path: Path, config_file: Path
@@ -233,11 +270,16 @@ class TestFixCommand:
         )
 
         assert result.exit_code == 1
-        assert "already exists" in result.output.lower() or "collision" in result.output.lower()
+        assert (
+            "already exists" in result.output.lower()
+            or "collision" in result.output.lower()
+        )
         # Verify no changes were made to the PHI file
         assert phi_file.read_text() == "SUB-1234\n"
 
-    def test_fix_multiple_files(self, runner: CliRunner, tmp_path: Path, config_file: Path):
+    def test_fix_multiple_files(
+        self, runner: CliRunner, tmp_path: Path, config_file: Path
+    ):
         """Test fixing multiple files."""
         file1 = tmp_path / "file1.txt"
         file1.write_text("SUB-1234\n")
@@ -247,7 +289,15 @@ class TestFixCommand:
 
         result = runner.invoke(
             main,
-            ["fix", "--config", str(config_file), "--prefix", "ID", str(file1), str(file2)],
+            [
+                "fix",
+                "--config",
+                str(config_file),
+                "--prefix",
+                "ID",
+                str(file1),
+                str(file2),
+            ],
         )
 
         assert result.exit_code == 0
@@ -294,3 +344,172 @@ class TestHelpFlag:
         assert result.exit_code == 0
         assert "--prefix" in result.output
         assert "--output-map" in result.output
+
+    def test_audit_help(self, runner: CliRunner):
+        """Test audit --help."""
+        result = runner.invoke(main, ["audit", "--help"])
+
+        assert result.exit_code == 0
+        assert "--config" in result.output
+        assert "--no-gitignore" in result.output
+        assert "--include-remotes" in result.output
+        assert "--output" in result.output
+
+
+def _git(*args: str) -> None:
+    """Run a git command in the current directory."""
+    subprocess.run(["git", *args], capture_output=True, check=True)
+
+
+def _setup_git_repo(config_text: str) -> None:
+    """Initialise a git repo with a committed pyproject.toml in cwd."""
+    _git("init")
+    _git("config", "user.email", "test@test.com")
+    _git("config", "user.name", "Test")
+    Path("pyproject.toml").write_text(config_text)
+    _git("add", ".")
+    _git("commit", "-m", "Initial commit")
+
+
+_AUDIT_CONFIG = (
+    "[tool.shredguard]\n"
+    "[[tool.shredguard.patterns]]\n"
+    'regex = "SUB-\\\\d{4,6}"\n'
+    'description = "Subject ID"\n'
+)
+
+
+class TestAuditCommand:
+    """Tests for the audit command via CliRunner."""
+
+    def test_audit_listed_in_main_help(self, runner: CliRunner):
+        """audit appears in the top-level --help output."""
+        result = runner.invoke(main, ["--help"])
+        assert result.exit_code == 0
+        assert "audit" in result.output
+
+    def test_config_not_found_error(self, runner: CliRunner, tmp_path: Path):
+        """audit exits 1 with a config error when no pyproject.toml exists."""
+        with runner.isolated_filesystem():
+            _git("init")
+            _git("config", "user.email", "test@test.com")
+            _git("config", "user.name", "Test")
+            _git("commit", "--allow-empty", "-m", "Empty")
+
+            result = runner.invoke(main, ["audit"])
+
+        assert result.exit_code == 1
+        assert "No shredguard configuration found" in result.output
+
+    def test_not_in_git_repo_error(self, runner: CliRunner, tmp_path: Path):
+        """audit exits 1 with an error when not inside a git repository."""
+        config = tmp_path / "pyproject.toml"
+        config.write_text(_AUDIT_CONFIG)
+
+        with runner.isolated_filesystem():
+            # No git init — get_repo_root() must fail
+            result = runner.invoke(main, ["audit", "--config", str(config)])
+
+        assert result.exit_code == 1
+        combined = result.output
+        assert "git" in combined.lower() or "repository" in combined.lower()
+
+    def test_clean_repo_exits_0(self, runner: CliRunner, tmp_path: Path):
+        """audit exits 0 and writes JSON when all commits are clean."""
+        output = tmp_path / "audit.json"
+
+        with runner.isolated_filesystem():
+            _setup_git_repo(_AUDIT_CONFIG)
+            Path("clean.txt").write_text("nothing to see here\n")
+            _git("add", "clean.txt")
+            _git("commit", "-m", "Add clean file")
+
+            result = runner.invoke(main, ["audit", "--output", str(output)])
+
+        assert result.exit_code == 0
+        assert output.exists()
+        assert "Audit Summary" in result.output
+
+    def test_repo_with_phi_exits_1(self, runner: CliRunner, tmp_path: Path):
+        """audit exits 1 when a commit contains PHI."""
+        output = tmp_path / "audit.json"
+
+        with runner.isolated_filesystem():
+            _setup_git_repo(_AUDIT_CONFIG)
+            Path("phi.txt").write_text("SUB-1234\n")
+            _git("add", "phi.txt")
+            _git("commit", "-m", "Add PHI")
+
+            result = runner.invoke(main, ["audit", "--output", str(output)])
+
+        assert result.exit_code == 1
+        assert "SUB-1234" in result.output
+
+    def test_dirty_config_blocked(self, runner: CliRunner, tmp_path: Path):
+        """audit exits 1 before scanning when pyproject.toml has uncommitted changes."""
+        output = tmp_path / "audit.json"
+
+        with runner.isolated_filesystem():
+            _setup_git_repo(_AUDIT_CONFIG)
+            # Modify without committing
+            Path("pyproject.toml").write_text(_AUDIT_CONFIG + "\n# dirty\n")
+
+            result = runner.invoke(main, ["audit", "--output", str(output)])
+
+        assert result.exit_code == 1
+        assert "Uncommitted changes" in result.output
+        assert not output.exists()
+
+    def test_dirty_gitignore_blocked(self, runner: CliRunner, tmp_path: Path):
+        """audit exits 1 before scanning when .gitignore has uncommitted changes."""
+        output = tmp_path / "audit.json"
+
+        with runner.isolated_filesystem():
+            _setup_git_repo(_AUDIT_CONFIG)
+            # Create an untracked .gitignore
+            Path(".gitignore").write_text("*.pyc\n")
+
+            result = runner.invoke(main, ["audit", "--output", str(output)])
+
+        assert result.exit_code == 1
+        assert "Uncommitted changes" in result.output
+
+    def test_json_anchor_commit_is_head(self, runner: CliRunner, tmp_path: Path):
+        """The JSON meta.anchor_commit matches HEAD at the time of the call."""
+        output = tmp_path / "audit.json"
+
+        with runner.isolated_filesystem():
+            _setup_git_repo(_AUDIT_CONFIG)
+            head = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+
+            runner.invoke(main, ["audit", "--output", str(output)])
+
+        data = json.loads(output.read_text())
+        assert data["meta"]["anchor_commit"] == head
+
+    def test_progress_shows_numbered_commits(self, runner: CliRunner, tmp_path: Path):
+        """Progress output contains [N/total] counters."""
+        with runner.isolated_filesystem():
+            _setup_git_repo(_AUDIT_CONFIG)
+
+            result = runner.invoke(
+                main, ["audit", "--output", str(tmp_path / "a.json")]
+            )
+
+        assert "[1/1]" in result.output
+
+    def test_default_output_file_written_in_cwd(self, runner: CliRunner):
+        """When --output is omitted a timestamped JSON file is written to cwd."""
+        with runner.isolated_filesystem():
+            _setup_git_repo(_AUDIT_CONFIG)
+
+            runner.invoke(main, ["audit"])
+
+            json_files = list(Path(".").glob("shredguard-audit-*.json"))
+
+        assert len(json_files) == 1

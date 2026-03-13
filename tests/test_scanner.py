@@ -7,12 +7,15 @@ from shredguard.scanner import (
     Match,
     is_binary_file,
     file_matches_globs,
+    scan_content_bytes,
     scan_file,
     scan_files,
 )
 
 
-def make_pattern(regex: str, description: str = "Test", index: int = 0, **kwargs) -> Pattern:
+def make_pattern(
+    regex: str, description: str = "Test", index: int = 0, **kwargs
+) -> Pattern:
     """Helper to create a Pattern for testing."""
     data = {"regex": regex, "description": description, **kwargs}
     return Pattern.from_dict(data, index)
@@ -44,7 +47,9 @@ class TestIsBinaryFile:
         unicode_file = tmp_path / "unicode.txt"
         # Use UTF-8 encoding explicitly and characters that won't cause
         # Windows console encoding issues when pytest displays errors
-        unicode_file.write_text("Hello, caf\u00e9! \u00e9\u00e8\u00e0", encoding="utf-8")
+        unicode_file.write_text(
+            "Hello, caf\u00e9! \u00e9\u00e8\u00e0", encoding="utf-8"
+        )
 
         assert not is_binary_file(unicode_file)
 
@@ -238,10 +243,107 @@ class TestScanFiles:
         assert binary_files[0] == binary_file
 
 
+class TestScanContentBytes:
+    """Tests for scan_content_bytes — scanning in-memory bytes from git objects."""
+
+    def test_finds_match_with_line_and_column(self):
+        content = b"Patient SUB-1234 enrolled\n"
+        pattern = make_pattern(r"SUB-\d{4}", "Subject ID")
+        matches, was_binary = scan_content_bytes(content, Path("test.txt"), [pattern])
+
+        assert not was_binary
+        assert len(matches) == 1
+        assert matches[0].matched_text == "SUB-1234"
+        assert matches[0].line == 1
+        assert matches[0].column == 9
+
+    def test_binary_content_is_skipped(self):
+        content = b"SUB-1234\x00binary data"
+        pattern = make_pattern(r"SUB-\d{4}", "Subject ID")
+        matches, was_binary = scan_content_bytes(content, Path("test.bin"), [pattern])
+
+        assert was_binary
+        assert matches == []
+
+    def test_crlf_normalization(self):
+        content = b"line1\r\nSUB-1234\r\nline3\r\n"
+        pattern = make_pattern(r"SUB-\d{4}", "Subject ID")
+        matches, _ = scan_content_bytes(content, Path("test.txt"), [pattern])
+
+        assert len(matches) == 1
+        assert matches[0].line == 2
+        assert matches[0].column == 1
+
+    def test_multiple_matches(self):
+        content = b"SUB-1234 and SUB-5678\n"
+        pattern = make_pattern(r"SUB-\d{4}", "Subject ID")
+        matches, _ = scan_content_bytes(content, Path("test.txt"), [pattern])
+
+        assert len(matches) == 2
+        assert matches[0].matched_text == "SUB-1234"
+        assert matches[1].matched_text == "SUB-5678"
+
+    def test_multiline_positions(self):
+        content = b"first line\n  SUB-1234 on line 2\nthird\n"
+        pattern = make_pattern(r"SUB-\d{4}", "Subject ID")
+        matches, _ = scan_content_bytes(content, Path("test.txt"), [pattern])
+
+        assert len(matches) == 1
+        assert matches[0].line == 2
+        assert matches[0].column == 3
+
+    def test_respects_file_include_glob(self):
+        content = b"SUB-1234\n"
+        pattern = make_pattern(r"SUB-\d{4}", "Subject ID", files=["*.csv"])
+
+        csv_matches, _ = scan_content_bytes(content, Path("data.csv"), [pattern])
+        txt_matches, _ = scan_content_bytes(content, Path("data.txt"), [pattern])
+
+        assert len(csv_matches) == 1
+        assert len(txt_matches) == 0
+
+    def test_respects_file_exclude_glob(self):
+        content = b"SUB-1234\n"
+        pattern = make_pattern(r"SUB-\d{4}", "Subject ID", exclude_files=["test_*"])
+
+        excluded_matches, _ = scan_content_bytes(
+            content, Path("test_data.txt"), [pattern]
+        )
+        included_matches, _ = scan_content_bytes(content, Path("data.txt"), [pattern])
+
+        assert len(excluded_matches) == 0
+        assert len(included_matches) == 1
+
+    def test_empty_content_returns_no_matches(self):
+        pattern = make_pattern(r"SUB-\d{4}", "Subject ID")
+        matches, was_binary = scan_content_bytes(b"", Path("empty.txt"), [pattern])
+
+        assert not was_binary
+        assert matches == []
+
+    def test_utf8_content_decoded_correctly(self):
+        content = "Subject SUB-1234 café enrolled\n".encode("utf-8")
+        pattern = make_pattern(r"SUB-\d{4}", "Subject ID")
+        matches, was_binary = scan_content_bytes(content, Path("test.txt"), [pattern])
+
+        assert not was_binary
+        assert len(matches) == 1
+        assert matches[0].matched_text == "SUB-1234"
+
+    def test_no_applicable_patterns_returns_empty(self):
+        content = b"SUB-1234\n"
+        # Pattern only applies to .csv files; path is .txt
+        pattern = make_pattern(r"SUB-\d{4}", "Subject ID", files=["*.csv"])
+        matches, was_binary = scan_content_bytes(content, Path("notes.txt"), [pattern])
+
+        assert not was_binary
+        assert matches == []
+
+
 class TestMatch:
     """Tests for Match class."""
 
-    def test_location_property(self, tmp_path: Path):
+    def test_location_property(self):
         """Test the location property format."""
         match = Match(
             file=Path("test.txt"),

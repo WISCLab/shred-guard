@@ -32,3 +32,6 @@ Thumbs.db
 
 # Release artifacts
 _version.py
+
+# Output files
+shredguard-audit-*.json
