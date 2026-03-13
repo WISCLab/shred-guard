@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import click
@@ -12,9 +14,22 @@ import click
 from . import __version__
 from .config import Config, ConfigError
 from .fixer import PrefixCollisionError, apply_fixes, check_prefix_collisions
+from .git import (
+    GitError,
+    get_commits_for_branch,
+    get_current_branch,
+    get_dirty_relevant_files,
+    get_file_content,
+    get_head_sha,
+    get_local_branches,
+    get_remote_branches,
+    get_repo_root,
+    get_tracked_files,
+    is_path_in_repo,
+)
 from .gitignore import GitignoreFilter
 from .output import Formatter
-from .scanner import scan_files
+from .scanner import scan_content_bytes, scan_files
 
 
 # Common PHI patterns that users can choose from
@@ -681,6 +696,344 @@ def _setup_precommit(formatter: Formatter) -> None:
                     click.secho(f"  ! Error: {result.stderr}", fg="red")
             except Exception as e:
                 click.secho(f"  ! Error running pre-commit: {e}", fg="red")
+
+
+@main.command()
+@click.option(
+    "--config",
+    "config_path",
+    type=click.Path(exists=True, path_type=Path),
+    help="Path to config file (default: pyproject.toml).",
+)
+@click.option(
+    "--no-gitignore",
+    is_flag=True,
+    help="Don't respect .gitignore patterns.",
+)
+@click.option(
+    "--include-remotes",
+    is_flag=True,
+    help="Also scan remote-tracking branches.",
+)
+@click.option(
+    "--output",
+    "output_path",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Path for audit JSON output (default: shredguard-audit-<timestamp>.json).",
+)
+@click.option(
+    "--verbose",
+    "-v",
+    is_flag=True,
+    help="Show verbose output (skipped binary files, etc.).",
+)
+def audit(
+    config_path: Path | None,
+    no_gitignore: bool,
+    include_remotes: bool,
+    output_path: Path | None,
+    verbose: bool,
+) -> None:
+    """Audit every commit on every branch for PHI patterns.
+
+    Configuration and .gitignore are locked to the current working-tree state
+    (or --config) and stay consistent across all commits. The repo must have no
+    uncommitted changes to these files so the audit is reproducible and can be
+    anchored to a specific commit.
+    """
+    formatter = Formatter()
+    now = datetime.now(timezone.utc)
+    command_str = " ".join(sys.argv)
+
+    # --- Load configuration (locked at call time) ---
+    try:
+        config = Config.load(config_path)
+    except ConfigError as e:
+        click.echo(formatter.format_error(str(e)), err=True)
+        sys.exit(1)
+
+    effective_config_path = config.config_path
+    assert effective_config_path is not None
+
+    # --- Require a git repository ---
+    try:
+        repo_root = get_repo_root()
+    except GitError as e:
+        click.echo(formatter.format_error(str(e)), err=True)
+        sys.exit(1)
+
+    # --- Warn if config is outside the repository ---
+    config_in_repo = is_path_in_repo(effective_config_path, repo_root)
+    if not config_in_repo:
+        click.echo(
+            formatter.format_warning(
+                f"Config file '{effective_config_path}' is outside the repository."
+            )
+        )
+        click.echo(
+            "\n  This configuration is not tracked by git. Without a manual record\n"
+            "  linking it to this audit you may not be able to reproduce these\n"
+            "  results later.\n"
+        )
+        if not click.confirm("  Continue anyway?", default=False):
+            click.echo("Audit cancelled.")
+            sys.exit(0)
+        click.echo()
+
+    # --- Reject dirty config / .gitignore files ---
+    try:
+        dirty = get_dirty_relevant_files(effective_config_path, repo_root)
+    except GitError as e:
+        click.echo(
+            formatter.format_error(f"Could not check git status: {e}"), err=True
+        )
+        sys.exit(1)
+
+    if dirty:
+        click.echo(
+            formatter.format_error(
+                "Uncommitted changes found in configuration or .gitignore files:"
+            )
+        )
+        for f in dirty:
+            try:
+                display = f.relative_to(repo_root)
+            except ValueError:
+                display = f
+            click.echo(f"  {display}")
+        click.echo(
+            "\n  The audit config must match a committed state so results can be\n"
+            "  reliably anchored to a specific commit. Please commit, stash, or\n"
+            "  discard the changes above and re-run.\n"
+        )
+        sys.exit(1)
+
+    # --- Anchor commit (HEAD at call time) ---
+    try:
+        anchor_sha = get_head_sha()
+        anchor_branch = get_current_branch()
+    except GitError as e:
+        click.echo(formatter.format_error(str(e)), err=True)
+        sys.exit(1)
+
+    # --- Resolve output path ---
+    if output_path is None:
+        ts = now.strftime("%Y%m%dT%H%M%SZ")
+        output_path = Path(f"shredguard-audit-{ts}.json")
+
+    # --- Gitignore filter (locked at current working-tree state) ---
+    gitignore_filter = GitignoreFilter(repo_root, respect_gitignore=not no_gitignore)
+
+    # --- Collect branches ---
+    try:
+        branches = get_local_branches()
+        if include_remotes:
+            remote = get_remote_branches()
+            # Preserve order, deduplicate
+            seen: set[str] = set(branches)
+            for b in remote:
+                if b not in seen:
+                    branches.append(b)
+                    seen.add(b)
+    except GitError as e:
+        click.echo(formatter.format_error(f"Could not list branches: {e}"), err=True)
+        sys.exit(1)
+
+    if not branches:
+        click.echo(formatter.format_warning("No branches found to audit."))
+        sys.exit(0)
+
+    # --- Enumerate unique commits across all branches ---
+    # Maps sha -> (subject, [branches that can reach it])
+    commit_order: list[str] = []
+    commit_info: dict[str, tuple[str, list[str]]] = {}
+
+    try:
+        for branch in branches:
+            for sha, subject in get_commits_for_branch(branch):
+                if sha not in commit_info:
+                    commit_info[sha] = (subject, [branch])
+                    commit_order.append(sha)
+                else:
+                    commit_info[sha][1].append(branch)
+    except GitError as e:
+        click.echo(
+            formatter.format_error(f"Could not enumerate commits: {e}"), err=True
+        )
+        sys.exit(1)
+
+    total = len(commit_order)
+    branch_label = "branches" if len(branches) != 1 else "branch"
+    commit_label = "commits" if total != 1 else "commit"
+    remote_note = " and remote" if include_remotes else ""
+    click.echo(
+        f"\nAuditing {len(branches)} local{remote_note} {branch_label} "
+        f"({total} unique {commit_label})...\n"
+    )
+
+    # --- Scan each unique commit ---
+    width = len(str(total))
+    results: list[dict] = []
+    commits_with_matches = 0
+    total_matches_count = 0
+
+    for idx, sha in enumerate(commit_order, 1):
+        subject, commit_branches = commit_info[sha]
+        short_sha = sha[:7]
+
+        subject_truncated = (subject[:47] + "\u2026") if len(subject) > 48 else subject
+        subject_field = f"{subject_truncated:<48}"
+
+        branches_str = ", ".join(commit_branches)
+        if len(branches_str) > 28:
+            branches_str = branches_str[:25] + "..."
+        branches_field = f"({branches_str})"
+
+        counter = f"[{idx:{width}d}/{total}]"
+
+        # Tracked files for this commit
+        try:
+            tracked = get_tracked_files(sha)
+        except GitError:
+            click.echo(
+                f"{counter} {short_sha}  {subject_field}  {branches_field}  "
+                "skipped (git error)"
+            )
+            continue
+
+        # Apply gitignore filter using current working-tree .gitignore
+        files_to_scan = [
+            rel
+            for rel in tracked
+            if not gitignore_filter.is_ignored(repo_root / rel)
+        ]
+
+        # Scan each file's content from the git object store
+        commit_matches = []
+        for rel in files_to_scan:
+            content = get_file_content(sha, rel)
+            if content is None:
+                continue
+            file_matches, was_binary = scan_content_bytes(
+                content, Path(rel), config.patterns
+            )
+            if was_binary and verbose:
+                click.echo(
+                    f"  {formatter.format_verbose_binary_skip(Path(rel))}",
+                    err=True,
+                )
+            commit_matches.extend(file_matches)
+
+        commit_matches.sort(key=lambda m: (str(m.file), m.line, m.column))
+
+        if commit_matches:
+            match_word = "match" if len(commit_matches) == 1 else "matches"
+            result_str = click.style(
+                f"{formatter.x_mark} {len(commit_matches)} {match_word}",
+                fg="red",
+                bold=True,
+            )
+            click.echo(
+                f"{counter} {short_sha}  {subject_field}  {branches_field:<30}  "
+                f"{result_str}"
+            )
+            indent = " " * (width + 10)  # align under subject
+            for m in commit_matches:
+                click.echo(f"{indent}{formatter.format_match(m)}")
+            commits_with_matches += 1
+            total_matches_count += len(commit_matches)
+            results.append(
+                {
+                    "sha": sha,
+                    "short_sha": short_sha,
+                    "message": subject,
+                    "branches": list(commit_branches),
+                    "matches": [
+                        {
+                            "file": str(m.file),
+                            "line": m.line,
+                            "column": m.column,
+                            "pattern_code": m.pattern.code,
+                            "pattern_description": m.pattern.description,
+                            "matched_text": m.matched_text,
+                        }
+                        for m in commit_matches
+                    ],
+                }
+            )
+        else:
+            result_str = click.style(formatter.check_mark, fg="green", bold=True)
+            click.echo(
+                f"{counter} {short_sha}  {subject_field}  {branches_field:<30}  "
+                f"{result_str}"
+            )
+
+    # --- Write JSON output ---
+    audit_data = {
+        "meta": {
+            "timestamp": now.isoformat(),
+            "anchor_commit": anchor_sha,
+            "anchor_branch": anchor_branch,
+            "command": command_str,
+        },
+        "config": {
+            "path": str(effective_config_path),
+            "tracked": config_in_repo,
+            "patterns": [
+                {
+                    "code": p.code,
+                    "regex": p.regex,
+                    "description": p.description,
+                    "files": p.files,
+                    "exclude_files": p.exclude_files,
+                }
+                for p in config.patterns
+            ],
+        },
+        "options": {
+            "include_remotes": include_remotes,
+            "no_gitignore": no_gitignore,
+        },
+        "branches_scanned": branches,
+        "summary": {
+            "commits_checked": total,
+            "commits_with_matches": commits_with_matches,
+            "total_matches": total_matches_count,
+        },
+        "results": results,
+    }
+
+    try:
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(audit_data, f, indent=2)
+    except OSError as e:
+        click.echo(
+            formatter.format_error(f"Could not write output file: {e}"), err=True
+        )
+        sys.exit(1)
+
+    # --- Summary ---
+    anchor_display = anchor_sha[:7]
+    if anchor_branch:
+        anchor_display += f" ({anchor_branch})"
+
+    click.echo()
+    click.echo("\u2500" * 60)
+    click.echo(click.style("Audit Summary", bold=True))
+    click.echo(f"  Anchor commit : {anchor_display}")
+    click.echo(f"  Branches      : {', '.join(branches)} ({len(branches)})")
+    click.echo(
+        f"  Commits       : {total} checked, {commits_with_matches} with matches"
+    )
+    config_display = str(effective_config_path)
+    if not config_in_repo:
+        config_display += " (untracked)"
+    click.echo(f"  Patterns      : {len(config.patterns)} ({config_display})")
+    click.echo(f"  Output        : {output_path}")
+    click.echo("\u2500" * 60)
+
+    sys.exit(1 if commits_with_matches > 0 else 0)
 
 
 if __name__ == "__main__":
