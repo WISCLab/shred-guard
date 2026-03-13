@@ -132,6 +132,54 @@ def scan_file(path: Path, patterns: list[Pattern]) -> tuple[list[Match], bool]:
     return matches, False
 
 
+def scan_content_bytes(
+    content_bytes: bytes, path: Path, patterns: list[Pattern]
+) -> tuple[list[Match], bool]:
+    """Scan in-memory bytes (e.g. from git objects) for pattern matches.
+
+    Args:
+        content_bytes: Raw file content, as returned by ``git show``.
+        path: Logical path of the file — used for reporting and glob filtering.
+        patterns: List of patterns to scan for.
+
+    Returns:
+        Tuple of (list of matches, was_binary). If was_binary is True the
+        content contained null bytes and matches will be empty.
+    """
+    if b"\x00" in content_bytes[:BINARY_CHECK_SIZE]:
+        return [], True
+
+    try:
+        content = content_bytes.decode("utf-8", errors="replace")
+    except Exception:
+        return [], True
+
+    content = content.replace("\r\n", "\n").replace("\r", "\n")
+
+    applicable_patterns = [
+        p for p in patterns if file_matches_globs(path, p.files, p.exclude_files)
+    ]
+
+    matches: list[Match] = []
+    for pattern in applicable_patterns:
+        for match in pattern.compiled.finditer(content):
+            start = match.start()
+            line_start = content.rfind("\n", 0, start) + 1
+            line_num = content.count("\n", 0, start) + 1
+            col_num = start - line_start + 1
+            matches.append(
+                Match(
+                    file=path,
+                    line=line_num,
+                    column=col_num,
+                    matched_text=match.group(),
+                    pattern=pattern,
+                )
+            )
+
+    return matches, False
+
+
 def scan_files(
     files: list[Path], patterns: list[Pattern], verbose: bool = False
 ) -> tuple[list[Match], list[Path]]:
