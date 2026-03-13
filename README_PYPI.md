@@ -1,31 +1,6 @@
-# ShredGuard
-
-[![PyPI](https://img.shields.io/pypi/v/shred-guard)](https://pypi.org/project/shred-guard/)
-[![WiscLab](https://img.shields.io/badge/WiscLab-kidspeech.wisc.edu-c5050c)](https://kidspeech.wisc.edu/)
-[![CI](https://github.com/WiscLab/shred-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/WISCLab/shred-guard/actions/workflows/ci.yml) [![CD](https://github.com/WISCLab/shred-guard/actions/workflows/cd.yml/badge.svg)](https://github.com/WISCLab/shred-guard/actions/workflows/cd.yml)
+[![GitHub](https://img.shields.io/badge/GitHub-WISCLab%2Fshred--guard-181717?logo=github)](https://github.com/WiscLab/shred-guard)
 
 Scan files for PHI (Protected Health Information) patterns and replace them with deterministic pseudonyms. Integrates seamlessly with pre-commit hooks.
-
-
-## Appendix
-
-- [Value Proposition](https://github.com/WISCLab/shred-guard/blob/main/value-proposition.svg)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Commands](#commands)
-  - [shredguard init](#shredguard-init)
-  - [shredguard check](#shredguard-check)
-  - [shredguard fix](#shredguard-fix)
-  - [shredguard audit](#shredguard-audit)
-- [Configuration](#configuration)
-- [Pre-commit](#pre-commit)
-- [Reference](#reference)
-  - [CLI Options](#cli-options)
-  - [Configuration Reference](#configuration-reference)
-  - [Built-in Pattern Suggestions](#built-in-pattern-suggestions)
-  - [Exit Codes](#exit-codes)
-  - [Binary File Handling](#binary-file-handling)
-- [License](#license)
 
 ## Installation
 
@@ -79,7 +54,7 @@ shredguard fix --prefix ANON .                     # Custom prefix: ANON-0, ANON
 shredguard fix --output-map mapping.json .         # Save original -> pseudonym mapping
 ```
 
-Replacements are deterministic: and the same value always gets the same pseudonym within a run.
+Replacements are deterministic: the same value always gets the same pseudonym within a run.
 
 ### `shredguard audit`
 
@@ -91,13 +66,11 @@ shredguard audit --include-remotes        # Also scan remote-tracking branches
 shredguard audit --output report.json     # Custom output file path
 ```
 
-Configuration and `.gitignore` are locked to the current working-tree state so results are reproducible. The config and `.gitignore` files must have no uncommitted changes before running.
-
-Output is written to a timestamped JSON file (`shredguard-audit-<timestamp>.json`) containing per-commit match details, branch info, and a summary. Exits with code `1` if any commits contain matches.
+Configuration and `.gitignore` are locked to the current working-tree state so results are reproducible. The config and `.gitignore` files must have no uncommitted changes before running. Output is written to a timestamped JSON file (`shredguard-audit-<timestamp>.json`).
 
 ## Configuration
 
-Configuration lives in `pyproject.toml` (or `/*/*.toml` set with --config):
+Configuration lives in `pyproject.toml` (or a standalone `shredguard.toml`):
 
 ```toml
 [tool.shredguard]
@@ -130,9 +103,7 @@ repos:
 
 Or let `shredguard init` set this up for you.
 
-## Reference
-
-### CLI Options
+## CLI Reference
 
 **`shredguard check [OPTIONS] [FILES]...`**
 
@@ -164,39 +135,12 @@ Or let `shredguard init` set this up for you.
 | `--config PATH` | Path to config file |
 | `-v, --verbose` | Show verbose output (skipped binary files, etc.) |
 
-### Configuration Reference
-
-```toml
-[[tool.shredguard.patterns]]
-regex = "SUB-\\d{4,6}"        # Required: regex pattern
-description = "Subject ID"     # Optional: shown in output
-files = ["*.csv", "data/**"]   # Optional: only scan matching files
-exclude_files = ["*_test.*"]   # Optional: skip matching files
-```
-
-### Built-in Pattern Suggestions
-
-When running `shredguard init`, you can choose from these common patterns:
-
-| Pattern | Description |
-|---------|-------------|
-| `SUB-\d{4,6}` | Subject ID |
-| `\b\d{3}-\d{2}-\d{4}\b` | Social Security Number |
-| `MRN\d{6,10}` | Medical Record Number |
-| `[email pattern]` | Email addresses |
-| `[phone pattern]` | Phone numbers (10 digits) |
-| `\b\d{5}(?:-\d{4})?\b` | ZIP codes |
-
-### Exit Codes
+## Exit Codes
 
 | Code | Meaning |
 |------|---------|
-| `0` | Success (no matches found for `check`) |
+| `0` | Success (no matches found) |
 | `1` | Matches found or error |
-
-### Binary File Handling
-
-Binary files are automatically detected and skipped (null byte check in first 8KB). Use `--verbose` to see skipped files.
 
 ## License
 

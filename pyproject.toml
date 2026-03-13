@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "shred-guard"
 dynamic = ["version"]
 description = "A CLI tool to scan files for configurable regex patterns (PHI identifiers) and optionally replace matches with deterministic pseudonyms"
-readme = "README.md"
+readme = "README_PYPI.md"
 requires-python = ">=3.10"
 authors = [
     { name = "@BeckettFrey", email = "beckett.code@outlook.com" }
