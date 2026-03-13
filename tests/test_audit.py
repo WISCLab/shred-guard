@@ -14,6 +14,7 @@ import pytest
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _git(*args: str, cwd: Path) -> str:
     result = subprocess.run(
         ["git", *args], cwd=cwd, check=True, capture_output=True, text=True
@@ -21,7 +22,9 @@ def _git(*args: str, cwd: Path) -> str:
     return result.stdout.strip()
 
 
-def _run_audit(*args: str, cwd: Path, stdin: str | None = None) -> subprocess.CompletedProcess:
+def _run_audit(
+    *args: str, cwd: Path, stdin: str | None = None
+) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, "-m", "shredguard", "audit", *args],
         cwd=cwd,
@@ -42,6 +45,7 @@ _CONFIG = (
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
@@ -64,6 +68,7 @@ def repo(tmp_path: Path) -> Path:
 # ---------------------------------------------------------------------------
 # Dirty-state pre-flight check
 # ---------------------------------------------------------------------------
+
 
 class TestAuditDirtyCheck:
     """Audit must be rejected whenever config or .gitignore have uncommitted changes."""
@@ -171,6 +176,7 @@ class TestAuditDirtyCheck:
 # Config outside the repository
 # ---------------------------------------------------------------------------
 
+
 class TestAuditConfigOutsideRepo:
     """When --config points outside the repo the user must confirm and the JSON notes it."""
 
@@ -180,42 +186,66 @@ class TestAuditConfigOutsideRepo:
         cfg.write_text(_CONFIG)
         return cfg
 
-    def test_warns_user_about_untracked_config(self, repo: Path, external_config: Path, tmp_path: Path):
+    def test_warns_user_about_untracked_config(
+        self, repo: Path, external_config: Path, tmp_path: Path
+    ):
         """
         GIVEN --config points outside the repository
         WHEN the user answers 'y'
         THEN a warning is shown before proceeding
         """
         output = tmp_path / "audit.json"
-        result = _run_audit("--config", str(external_config), "--output", str(output),
-                            cwd=repo, stdin="y\n")
+        result = _run_audit(
+            "--config",
+            str(external_config),
+            "--output",
+            str(output),
+            cwd=repo,
+            stdin="y\n",
+        )
 
         combined = result.stdout + result.stderr
         assert "outside the repository" in combined or "not tracked" in combined.lower()
 
-    def test_proceeds_and_marks_config_untracked_in_json(self, repo: Path, external_config: Path, tmp_path: Path):
+    def test_proceeds_and_marks_config_untracked_in_json(
+        self, repo: Path, external_config: Path, tmp_path: Path
+    ):
         """
         GIVEN --config is outside the repo and user confirms
         WHEN audit completes
         THEN JSON records config.tracked = false
         """
         output = tmp_path / "audit.json"
-        _run_audit("--config", str(external_config), "--output", str(output),
-                   cwd=repo, stdin="y\n")
+        _run_audit(
+            "--config",
+            str(external_config),
+            "--output",
+            str(output),
+            cwd=repo,
+            stdin="y\n",
+        )
 
         assert output.exists()
         data = json.loads(output.read_text())
         assert data["config"]["tracked"] is False
 
-    def test_cancels_on_no_and_writes_no_json(self, repo: Path, external_config: Path, tmp_path: Path):
+    def test_cancels_on_no_and_writes_no_json(
+        self, repo: Path, external_config: Path, tmp_path: Path
+    ):
         """
         GIVEN --config is outside the repo and user answers 'n'
         WHEN audit is cancelled
         THEN exit code is 0, JSON is not written, and output says cancelled
         """
         output = tmp_path / "audit.json"
-        result = _run_audit("--config", str(external_config), "--output", str(output),
-                            cwd=repo, stdin="n\n")
+        result = _run_audit(
+            "--config",
+            str(external_config),
+            "--output",
+            str(output),
+            cwd=repo,
+            stdin="n\n",
+        )
 
         assert result.returncode == 0
         assert not output.exists()
@@ -225,6 +255,7 @@ class TestAuditConfigOutsideRepo:
 # ---------------------------------------------------------------------------
 # Progress output format
 # ---------------------------------------------------------------------------
+
 
 class TestAuditProgress:
     """Audit prints numbered progress for every commit."""
@@ -248,7 +279,9 @@ class TestAuditProgress:
         # Either Unicode ✓ or ASCII [OK]
         assert "\u2713" in result.stdout or "[OK]" in result.stdout
 
-    def test_commit_with_phi_shows_x_and_match_details(self, repo: Path, tmp_path: Path):
+    def test_commit_with_phi_shows_x_and_match_details(
+        self, repo: Path, tmp_path: Path
+    ):
         """
         GIVEN a commit containing PHI
         WHEN running audit
@@ -285,6 +318,7 @@ class TestAuditProgress:
 # ---------------------------------------------------------------------------
 # JSON output
 # ---------------------------------------------------------------------------
+
 
 class TestAuditJsonOutput:
     """The JSON file is the authoritative, reproducible audit record."""
@@ -389,6 +423,7 @@ class TestAuditJsonOutput:
 # Commit deduplication
 # ---------------------------------------------------------------------------
 
+
 class TestAuditCommitDeduplication:
     """Commits reachable from multiple branches are scanned only once."""
 
@@ -440,7 +475,7 @@ class TestAuditCommitDeduplication:
         WHEN running audit
         THEN commits_checked == 2 (the shared base + the main-only commit)
         """
-        initial_sha = _git("rev-parse", "HEAD", cwd=repo)
+        _ = _git("rev-parse", "HEAD", cwd=repo)
         _git("branch", "feature", cwd=repo)
 
         (repo / "main_only.txt").write_text("only on main\n")
@@ -458,8 +493,8 @@ class TestAuditCommitDeduplication:
 # Flags and edge cases
 # ---------------------------------------------------------------------------
 
-class TestAuditFlags:
 
+class TestAuditFlags:
     def test_not_a_git_repo_exits_with_error(self, tmp_path: Path):
         """
         GIVEN a directory that is not a git repository
@@ -480,13 +515,15 @@ class TestAuditFlags:
         THEN it succeeds and JSON records include_remotes: true
         """
         output = tmp_path / "audit.json"
-        result = _run_audit("--include-remotes", "--output", str(output), cwd=repo)
+        _ = _run_audit("--include-remotes", "--output", str(output), cwd=repo)
 
         assert output.exists()
         data = json.loads(output.read_text())
         assert data["options"]["include_remotes"] is True
 
-    def test_gitignore_filters_committed_files_by_default(self, repo: Path, tmp_path: Path):
+    def test_gitignore_filters_committed_files_by_default(
+        self, repo: Path, tmp_path: Path
+    ):
         """
         GIVEN secrets/phi.txt was committed before .gitignore excluded it
         WHEN running audit without --no-gitignore
@@ -534,8 +571,8 @@ class TestAuditFlags:
 # Exit codes
 # ---------------------------------------------------------------------------
 
-class TestAuditExitCodes:
 
+class TestAuditExitCodes:
     def test_exits_0_when_all_commits_are_clean(self, repo: Path, tmp_path: Path):
         result = _run_audit("--output", str(tmp_path / "a.json"), cwd=repo)
         assert result.returncode == 0

@@ -13,7 +13,9 @@ from shredguard.scanner import (
 )
 
 
-def make_pattern(regex: str, description: str = "Test", index: int = 0, **kwargs) -> Pattern:
+def make_pattern(
+    regex: str, description: str = "Test", index: int = 0, **kwargs
+) -> Pattern:
     """Helper to create a Pattern for testing."""
     data = {"regex": regex, "description": description, **kwargs}
     return Pattern.from_dict(data, index)
@@ -45,7 +47,9 @@ class TestIsBinaryFile:
         unicode_file = tmp_path / "unicode.txt"
         # Use UTF-8 encoding explicitly and characters that won't cause
         # Windows console encoding issues when pytest displays errors
-        unicode_file.write_text("Hello, caf\u00e9! \u00e9\u00e8\u00e0", encoding="utf-8")
+        unicode_file.write_text(
+            "Hello, caf\u00e9! \u00e9\u00e8\u00e0", encoding="utf-8"
+        )
 
         assert not is_binary_file(unicode_file)
 
@@ -302,7 +306,9 @@ class TestScanContentBytes:
         content = b"SUB-1234\n"
         pattern = make_pattern(r"SUB-\d{4}", "Subject ID", exclude_files=["test_*"])
 
-        excluded_matches, _ = scan_content_bytes(content, Path("test_data.txt"), [pattern])
+        excluded_matches, _ = scan_content_bytes(
+            content, Path("test_data.txt"), [pattern]
+        )
         included_matches, _ = scan_content_bytes(content, Path("data.txt"), [pattern])
 
         assert len(excluded_matches) == 0

@@ -21,6 +21,7 @@ from shredguard.git import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _git(*args: str, cwd: Path) -> str:
     result = subprocess.run(
         ["git", *args], cwd=cwd, check=True, capture_output=True, text=True
@@ -38,6 +39,7 @@ def _current_branch(repo: Path) -> str:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
     """Minimal git repo with one committed file."""
@@ -53,6 +55,7 @@ def repo(tmp_path: Path) -> Path:
 # ---------------------------------------------------------------------------
 # is_path_in_repo
 # ---------------------------------------------------------------------------
+
 
 class TestIsPathInRepo:
     def test_nested_path_inside_repo(self, tmp_path: Path):
@@ -80,6 +83,7 @@ class TestIsPathInRepo:
 # ---------------------------------------------------------------------------
 # get_dirty_relevant_files
 # ---------------------------------------------------------------------------
+
 
 class TestGetDirtyRelevantFiles:
     def test_clean_repo_returns_empty(self, repo: Path):
@@ -156,13 +160,18 @@ class TestGetDirtyRelevantFiles:
 # get_local_branches
 # ---------------------------------------------------------------------------
 
+
 class TestGetLocalBranches:
-    def test_returns_at_least_one_branch(self, repo: Path, monkeypatch: pytest.MonkeyPatch):
+    def test_returns_at_least_one_branch(
+        self, repo: Path, monkeypatch: pytest.MonkeyPatch
+    ):
         monkeypatch.chdir(repo)
         branches = get_local_branches()
         assert len(branches) >= 1
 
-    def test_returns_all_local_branches(self, repo: Path, monkeypatch: pytest.MonkeyPatch):
+    def test_returns_all_local_branches(
+        self, repo: Path, monkeypatch: pytest.MonkeyPatch
+    ):
         monkeypatch.chdir(repo)
         _git("branch", "feature", cwd=repo)
         _git("branch", "hotfix", cwd=repo)
@@ -171,7 +180,9 @@ class TestGetLocalBranches:
         assert any("feature" in b for b in branches)
         assert any("hotfix" in b for b in branches)
 
-    def test_does_not_include_remote_branches(self, repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    def test_does_not_include_remote_branches(
+        self, repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
         # Create a second repo to act as a remote, then fetch so remote-tracking
         # refs (origin/main) actually exist in the local repo's .git/refs/remotes.
         remote = tmp_path / "remote"
@@ -190,8 +201,11 @@ class TestGetLocalBranches:
 # get_commits_for_branch
 # ---------------------------------------------------------------------------
 
+
 class TestGetCommitsForBranch:
-    def test_returns_commit_sha_and_subject(self, repo: Path, monkeypatch: pytest.MonkeyPatch):
+    def test_returns_commit_sha_and_subject(
+        self, repo: Path, monkeypatch: pytest.MonkeyPatch
+    ):
         monkeypatch.chdir(repo)
         branch = _current_branch(repo)
         commits = get_commits_for_branch(branch)
@@ -226,6 +240,7 @@ class TestGetCommitsForBranch:
 # get_tracked_files
 # ---------------------------------------------------------------------------
 
+
 class TestGetTrackedFiles:
     def test_returns_committed_files(self, repo: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(repo)
@@ -234,7 +249,9 @@ class TestGetTrackedFiles:
         files = get_tracked_files(sha)
         assert "file.txt" in files
 
-    def test_does_not_return_untracked_files(self, repo: Path, monkeypatch: pytest.MonkeyPatch):
+    def test_does_not_return_untracked_files(
+        self, repo: Path, monkeypatch: pytest.MonkeyPatch
+    ):
         monkeypatch.chdir(repo)
         (repo / "untracked.txt").write_text("not committed\n")
         sha = _git("rev-parse", "HEAD", cwd=repo)
@@ -242,7 +259,9 @@ class TestGetTrackedFiles:
         files = get_tracked_files(sha)
         assert "untracked.txt" not in files
 
-    def test_reflects_files_at_that_commit(self, repo: Path, monkeypatch: pytest.MonkeyPatch):
+    def test_reflects_files_at_that_commit(
+        self, repo: Path, monkeypatch: pytest.MonkeyPatch
+    ):
         """A file added after a commit is not in that commit's tree."""
         monkeypatch.chdir(repo)
         old_sha = _git("rev-parse", "HEAD", cwd=repo)
@@ -259,6 +278,7 @@ class TestGetTrackedFiles:
 # get_file_content
 # ---------------------------------------------------------------------------
 
+
 class TestGetFileContent:
     def test_returns_file_bytes(self, repo: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(repo)
@@ -268,13 +288,17 @@ class TestGetFileContent:
         assert content is not None
         assert b"hello" in content
 
-    def test_returns_none_for_nonexistent_path(self, repo: Path, monkeypatch: pytest.MonkeyPatch):
+    def test_returns_none_for_nonexistent_path(
+        self, repo: Path, monkeypatch: pytest.MonkeyPatch
+    ):
         monkeypatch.chdir(repo)
         sha = _git("rev-parse", "HEAD", cwd=repo)
 
         assert get_file_content(sha, "does-not-exist.txt") is None
 
-    def test_returns_correct_historical_content(self, repo: Path, monkeypatch: pytest.MonkeyPatch):
+    def test_returns_correct_historical_content(
+        self, repo: Path, monkeypatch: pytest.MonkeyPatch
+    ):
         """Content from an old commit differs from the current version."""
         monkeypatch.chdir(repo)
         old_sha = _git("rev-parse", "HEAD", cwd=repo)

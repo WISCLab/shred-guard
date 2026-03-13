@@ -161,8 +161,7 @@ class Formatter:
         files_word = "file" if file_count == 1 else "files"
 
         return (
-            f"{x_mark} Found {match_count} {matches_word} "
-            f"in {file_count} {files_word}"
+            f"{x_mark} Found {match_count} {matches_word} in {file_count} {files_word}"
         )
 
     def format_fix_summary(self, result: FixResult) -> str:

@@ -106,9 +106,7 @@ def scan_file(path: Path, patterns: list[Pattern]) -> tuple[list[Match], bool]:
 
     # Filter patterns by file globs
     applicable_patterns = [
-        p
-        for p in patterns
-        if file_matches_globs(path, p.files, p.exclude_files)
+        p for p in patterns if file_matches_globs(path, p.files, p.exclude_files)
     ]
 
     for pattern in applicable_patterns:

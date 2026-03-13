@@ -305,13 +305,19 @@ def fix(
             click.echo(formatter.format_verbose_binary_skip(bf), err=True)
 
     if not matches:
-        click.echo(formatter.format_fix_summary(
-            type("FixResult", (), {
-                "total_replacements": 0,
-                "unique_values": 0,
-                "files_modified": 0,
-            })()
-        ))
+        click.echo(
+            formatter.format_fix_summary(
+                type(
+                    "FixResult",
+                    (),
+                    {
+                        "total_replacements": 0,
+                        "unique_values": 0,
+                        "files_modified": 0,
+                    },
+                )()
+            )
+        )
         sys.exit(0)
 
     # Apply fixes
@@ -370,7 +376,9 @@ def init() -> None:
         default=1,
     )
 
-    config_path = Path("pyproject.toml") if config_choice == 1 else Path("shredguard.toml")
+    config_path = (
+        Path("pyproject.toml") if config_choice == 1 else Path("shredguard.toml")
+    )
     click.echo(f"\n  -> Using: {config_path}")
     click.echo()
 
@@ -408,10 +416,12 @@ def init() -> None:
         # Validate the regex
         try:
             re.compile(regex)
-            selected_patterns.append({
-                "regex": regex,
-                "description": description,
-            })
+            selected_patterns.append(
+                {
+                    "regex": regex,
+                    "description": description,
+                }
+            )
             click.secho(f"  -> Added: {description}", fg="green")
         except re.error as e:
             click.secho(f"  -> Invalid regex: {e}", fg="red")
@@ -421,7 +431,9 @@ def init() -> None:
 
     if not selected_patterns:
         click.secho("\nNo patterns selected!", fg="red")
-        if not click.confirm("Continue with no patterns? (You can add them later)", default=False):
+        if not click.confirm(
+            "Continue with no patterns? (You can add them later)", default=False
+        ):
             click.echo("Setup cancelled.")
             sys.exit(1)
 
@@ -438,7 +450,9 @@ def init() -> None:
     include_files = None
     exclude_files = None
 
-    if click.confirm("Do you want to restrict scanning to specific file patterns?", default=False):
+    if click.confirm(
+        "Do you want to restrict scanning to specific file patterns?", default=False
+    ):
         click.echo()
         click.echo("Enter glob patterns separated by commas.")
         click.echo("Examples: *.csv, *.txt, data/**/*.json")
@@ -476,8 +490,12 @@ def init() -> None:
         if config_choice == 1:  # pyproject.toml
             existing = config_path.read_text()
             if "[tool.shredguard]" in existing:
-                click.secho(f"  ! {config_path} already has ShredGuard config", fg="yellow")
-                if not click.confirm("  Overwrite existing ShredGuard section?", default=False):
+                click.secho(
+                    f"  ! {config_path} already has ShredGuard config", fg="yellow"
+                )
+                if not click.confirm(
+                    "  Overwrite existing ShredGuard section?", default=False
+                ):
                     click.echo("  Keeping existing config.")
                 else:
                     # Remove existing shredguard section and add new one
@@ -587,7 +605,9 @@ def _update_pyproject_toml(path: Path, new_shredguard_content: str) -> None:
             continue
         elif in_shredguard_section:
             # Check if we've hit a new section
-            if line.strip().startswith("[") and not line.strip().startswith("[[tool.shredguard"):
+            if line.strip().startswith("[") and not line.strip().startswith(
+                "[[tool.shredguard"
+            ):
                 in_shredguard_section = False
                 new_lines.append(line)
         else:
@@ -642,7 +662,9 @@ def _setup_precommit(formatter: Formatter) -> None:
         existing = precommit_config_path.read_text()
 
         if "shredguard" in existing.lower():
-            click.secho("  -> .pre-commit-config.yaml already has ShredGuard", fg="green")
+            click.secho(
+                "  -> .pre-commit-config.yaml already has ShredGuard", fg="green"
+            )
         else:
             click.echo("  Found existing .pre-commit-config.yaml")
             click.echo()
@@ -785,9 +807,7 @@ def audit(
     try:
         dirty = get_dirty_relevant_files(effective_config_path, repo_root)
     except GitError as e:
-        click.echo(
-            formatter.format_error(f"Could not check git status: {e}"), err=True
-        )
+        click.echo(formatter.format_error(f"Could not check git status: {e}"), err=True)
         sys.exit(1)
 
     if dirty:
@@ -904,9 +924,7 @@ def audit(
 
         # Apply gitignore filter using current working-tree .gitignore
         files_to_scan = [
-            rel
-            for rel in tracked
-            if not gitignore_filter.is_ignored(repo_root / rel)
+            rel for rel in tracked if not gitignore_filter.is_ignored(repo_root / rel)
         ]
 
         # Scan each file's content from the git object store

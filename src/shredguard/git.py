@@ -120,11 +120,7 @@ def get_local_branches() -> list[str]:
 def get_remote_branches() -> list[str]:
     """Return all remote-tracking branch names, excluding HEAD pointers."""
     output = _run("branch", "-r", "--format=%(refname:short)")
-    return [
-        b.strip()
-        for b in output.splitlines()
-        if b.strip() and "HEAD" not in b
-    ]
+    return [b.strip() for b in output.splitlines() if b.strip() and "HEAD" not in b]
 
 
 def get_commits_for_branch(branch: str) -> list[tuple[str, str]]:

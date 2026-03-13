@@ -139,8 +139,20 @@ class TestApplyFixes:
 
         pattern = make_pattern(r"SUB-\d{4}")
         matches = [
-            Match(file=test_file, line=1, column=1, matched_text="SUB-1234", pattern=pattern),
-            Match(file=test_file, line=1, column=14, matched_text="SUB-1234", pattern=pattern),
+            Match(
+                file=test_file,
+                line=1,
+                column=1,
+                matched_text="SUB-1234",
+                pattern=pattern,
+            ),
+            Match(
+                file=test_file,
+                line=1,
+                column=14,
+                matched_text="SUB-1234",
+                pattern=pattern,
+            ),
         ]
 
         result = apply_fixes(matches, "ID")
@@ -156,8 +168,20 @@ class TestApplyFixes:
 
         pattern = make_pattern(r"SUB-\d{4}")
         matches = [
-            Match(file=test_file, line=1, column=1, matched_text="SUB-1234", pattern=pattern),
-            Match(file=test_file, line=1, column=14, matched_text="SUB-5678", pattern=pattern),
+            Match(
+                file=test_file,
+                line=1,
+                column=1,
+                matched_text="SUB-1234",
+                pattern=pattern,
+            ),
+            Match(
+                file=test_file,
+                line=1,
+                column=14,
+                matched_text="SUB-5678",
+                pattern=pattern,
+            ),
         ]
 
         result = apply_fixes(matches, "ID")
@@ -246,8 +270,12 @@ class TestApplyFixes:
 
         pattern = make_pattern(r"SUB-\d{4}")
         matches = [
-            Match(file=file1, line=1, column=1, matched_text="SUB-1234", pattern=pattern),
-            Match(file=file2, line=1, column=1, matched_text="SUB-5678", pattern=pattern),
+            Match(
+                file=file1, line=1, column=1, matched_text="SUB-1234", pattern=pattern
+            ),
+            Match(
+                file=file2, line=1, column=1, matched_text="SUB-5678", pattern=pattern
+            ),
         ]
 
         result = apply_fixes(matches, "ID")

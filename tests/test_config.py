@@ -128,6 +128,7 @@ description = "Test"
 
         # Change to subdirectory and load (simulated by using the subdir's parent search)
         import os
+
         original_cwd = os.getcwd()
         try:
             os.chdir(subdir)

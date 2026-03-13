@@ -59,13 +59,28 @@ def _generate_safe_content() -> str:
 
 def _random_filename() -> str:
     """Generate a random safe filename."""
-    prefixes = ["data", "config", "utils", "helper", "main", "test", "module", "handler", "service", "core"]
+    prefixes = [
+        "data",
+        "config",
+        "utils",
+        "helper",
+        "main",
+        "test",
+        "module",
+        "handler",
+        "service",
+        "core",
+    ]
     suffixes = ["", "_v2", "_new", "_backup", "_temp"]
     extensions = [".py", ".txt", ".json", ".md", ".yaml", ".csv", ".cfg", ".ini"]
-    return f"{random.choice(prefixes)}{random.choice(suffixes)}{random.choice(extensions)}"
+    return (
+        f"{random.choice(prefixes)}{random.choice(suffixes)}{random.choice(extensions)}"
+    )
 
 
-def _create_random_file_structure(root: Path, num_files: int = 20, max_depth: int = 3) -> None:
+def _create_random_file_structure(
+    root: Path, num_files: int = 20, max_depth: int = 3
+) -> None:
     """Create a random file structure with safe content.
 
     This simulates a real project with many files to ensure shredguard
@@ -77,7 +92,18 @@ def _create_random_file_structure(root: Path, num_files: int = 20, max_depth: in
         max_depth: Maximum directory nesting depth
     """
     # Generate some random directory paths
-    dir_names = ["src", "lib", "pkg", "internal", "core", "util", "common", "shared", "app", "modules"]
+    dir_names = [
+        "src",
+        "lib",
+        "pkg",
+        "internal",
+        "core",
+        "util",
+        "common",
+        "shared",
+        "app",
+        "modules",
+    ]
 
     created_files = set()
 
@@ -172,25 +198,24 @@ class CLIResult:
     def assert_contains(self, text: str) -> "CLIResult":
         """Assert output contains text. Returns self for chaining."""
         assert text in self.output, (
-            f"Expected output to contain: {text!r}\n"
-            f"Actual output: {self.output}"
+            f"Expected output to contain: {text!r}\nActual output: {self.output}"
         )
         return self
 
     def assert_not_contains(self, text: str) -> "CLIResult":
         """Assert output does not contain text. Returns self for chaining."""
         assert text not in self.output, (
-            f"Expected output NOT to contain: {text!r}\n"
-            f"Actual output: {self.output}"
+            f"Expected output NOT to contain: {text!r}\nActual output: {self.output}"
         )
         return self
 
-    def assert_match_format(self, file: str, line: int, col: int, code: str) -> "CLIResult":
+    def assert_match_format(
+        self, file: str, line: int, col: int, code: str
+    ) -> "CLIResult":
         """Assert output contains a match in ruff-style format."""
         pattern = f"{file}:{line}:{col}: {code}"
         assert pattern in self.output, (
-            f"Expected match format: {pattern}\n"
-            f"Actual output: {self.output}"
+            f"Expected match format: {pattern}\nActual output: {self.output}"
         )
         return self
 
@@ -204,7 +229,8 @@ def project(tmp_path: Path) -> Path:
     realistic directory structures with many files.
     """
     config = tmp_path / "pyproject.toml"
-    config.write_text(dedent("""
+    config.write_text(
+        dedent("""
         [tool.shredguard]
         [[tool.shredguard.patterns]]
         regex = "SUB-\\\\d{4,6}"
@@ -217,10 +243,13 @@ def project(tmp_path: Path) -> Path:
         [[tool.shredguard.patterns]]
         regex = "MRN\\\\d{6,10}"
         description = "Medical Record Number"
-    """).strip())
+    """).strip()
+    )
 
     # Create random file structure to simulate real project
-    _create_random_file_structure(tmp_path, num_files=random.randint(5, 50), max_depth=random.randint(2, 50))
+    _create_random_file_structure(
+        tmp_path, num_files=random.randint(5, 50), max_depth=random.randint(2, 50)
+    )
 
     return tmp_path
 
@@ -234,6 +263,7 @@ def cli(project: Path) -> CLIRunner:
 # =============================================================================
 # CHECK COMMAND
 # =============================================================================
+
 
 class TestCheckCommand:
     """
@@ -274,11 +304,13 @@ class TestCheckCommand:
         WHEN running `shredguard check <file>`
         THEN all patterns are reported with their respective codes
         """
-        (project / "data.txt").write_text(dedent("""
+        (project / "data.txt").write_text(
+            dedent("""
             Subject: SUB-1234
             SSN: 123-45-6789
             MRN: MRN12345678
-        """).strip())
+        """).strip()
+        )
 
         result = cli.run("check", "data.txt", expect_fail=True)
 
@@ -360,6 +392,7 @@ class TestCheckCommand:
 # =============================================================================
 # FIX COMMAND
 # =============================================================================
+
 
 class TestFixCommand:
     """
@@ -452,6 +485,7 @@ class TestFixCommand:
 # PREFIX COLLISION DETECTION
 # =============================================================================
 
+
 class TestPrefixCollisionDetection:
     """
     ShredGuard prevents accidental double-redaction by detecting
@@ -516,25 +550,30 @@ class TestPrefixCollisionDetection:
 # PATTERN FILE SCOPING
 # =============================================================================
 
+
 class TestPatternFileScoping:
     """
     Patterns can be scoped to specific file types using `files` and
     `exclude_files` glob patterns in the configuration.
     """
 
-    def test_pattern_only_applies_to_specified_files(self, cli: CLIRunner, project: Path):
+    def test_pattern_only_applies_to_specified_files(
+        self, cli: CLIRunner, project: Path
+    ):
         """
         GIVEN a pattern configured to only match *.csv files
         WHEN running check on both .csv and .txt files
         THEN only the .csv file triggers a match
         """
-        (project / "pyproject.toml").write_text(dedent("""
+        (project / "pyproject.toml").write_text(
+            dedent("""
             [tool.shredguard]
             [[tool.shredguard.patterns]]
             regex = "SUB-\\\\d{4}"
             description = "Subject ID"
             files = ["*.csv"]
-        """).strip())
+        """).strip()
+        )
 
         (project / "data.csv").write_text("SUB-1234\n")
         (project / "data.txt").write_text("SUB-1234\n")
@@ -550,13 +589,15 @@ class TestPatternFileScoping:
         WHEN running check on both regular and test files
         THEN test files are not scanned for that pattern
         """
-        (project / "pyproject.toml").write_text(dedent("""
+        (project / "pyproject.toml").write_text(
+            dedent("""
             [tool.shredguard]
             [[tool.shredguard.patterns]]
             regex = "SUB-\\\\d{4}"
             description = "Subject ID"
             exclude_files = ["*_test.*"]
-        """).strip())
+        """).strip()
+        )
 
         (project / "data.txt").write_text("SUB-1234\n")
         (project / "data_test.txt").write_text("SUB-5678\n")
@@ -570,6 +611,7 @@ class TestPatternFileScoping:
 # =============================================================================
 # ERROR HANDLING
 # =============================================================================
+
 
 class TestErrorHandling:
     """
@@ -596,12 +638,14 @@ class TestErrorHandling:
         WHEN running any shredguard command
         THEN a clear error identifies the problematic pattern
         """
-        (tmp_path / "pyproject.toml").write_text(dedent("""
+        (tmp_path / "pyproject.toml").write_text(
+            dedent("""
             [tool.shredguard]
             [[tool.shredguard.patterns]]
             regex = "[invalid"
             description = "Bad pattern"
-        """).strip())
+        """).strip()
+        )
 
         cli = CLIRunner(tmp_path)
         (tmp_path / "data.txt").write_text("test\n")
